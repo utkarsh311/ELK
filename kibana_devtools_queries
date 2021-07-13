@@ -1,0 +1,456 @@
+#REGEX FOR LOGS in this folder
+^(?<ip>[\d | .]+)\W+(?<date>\S+ )\S+\s+\W+(?<method>\w+)(?<message>.*) 
+
+
+#######################################################KIBANA DEV TOOLS COMMANDS##################################################################################################################
+
+#INDEXING DOCUMENTS
+
+#PUT indexname/type/id { }
+PUT vehicle/_doc/101
+{
+   "name":"honda civic",
+   "color":"blue",
+   "power":"1000cc",
+   "price":"1000000",
+   "airbag":"yes"
+}
+
+#NOTE-_doc is used instead of any other type like car or bus etc, because type is depricated in el7
+
+HEAD vehicle/_doc/101
+#HEAD command will just check if under vehicle index we have a type doc and if we have a id 101
+#if yes, will return 200-OK if not will return 404-not found.It wont return the values in the index
+
+PUT vehicle/_doc/101
+{
+   "name":"honda civic",
+   "color":"blue",
+   "power":"1000cc",
+   "price":"10",
+   "airbag":"yes"a
+
+}
+#NOTE-> DOCUMENTS are immutable, so in the above command we just cant change the price to 10 , we will need to reindex the entire doc
+
+#Now suppose we want to just update one field in the document ,we use update API, e-g:
+POST vehicle/_doc/101/_update
+{
+  "doc":
+  {
+    "price":"150",
+    "driver":"Tom"
+  }
+}
+#To delete a particular entry
+DELETE vehicle/_doc/101
+
+#to delete entire index
+DELETE vehicle
+
+#NOTE-> DOCUMENTS IN ES ARE IMMUTABLE, SO IF WE CHANGE ANYTHING IN A DOCUMENT IT KIND OF REINDEX'S IT INSTEAD OF UPDATING SAME DOC
+
+GET vehicle/_search
+
+
+
+################################################################################################################################################################################
+#SEARCH QUERY DSL(PART1)
+
+#default size is 10 , max is 10000
+GET courses/_search
+{
+  "size": 10
+  , "query": {
+    "match_all": {}
+  }
+}
+###########################################################################################################
+#will search for all documents where name has 'computer' in it and will return result based on _score(revelent score)
+GET courses/_search
+{
+  "query": {
+    "match": {
+      "name": "computer"
+    }
+  }
+}
+###############################################################################################################
+#TO CHECK IF  A FIELD EXISTS OR NOT IN A DOCUMENT, SAY email field does not exist for id 5 under professor dict,
+#so when we run the exists query only 9 records should return and id 5 which does not have email field should not be returned.
+
+GET courses/_search
+{
+  "query": {
+    "exists": {"field": "professor.email"}
+  }
+}
+#NOTE-> we can not access email directly as it is under professor dict , so professor.email. Total 9 records returned
+#####################################################################################################################
+
+############################# IMP IMP ####################################################################################
+#when we want to search based on two conditions we need to include bool , must so that we can use multiple match
+GET courses/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+            {"match": {"name": "Computer"}},
+            {"match":{"room": "c8"}}
+      ]
+    }
+  }
+}
+#it will only return the record where name has computer AND room is c8
+
+
+###################################################################################################################################################################################
+
+#DSL QURY PART 2
+
+#JUST LIKE MUST WE HAVE MUST_NOT, it works similar to must
+GET courses/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {"match": {"name": "accounting"}},
+        {"match": {"room": "e3"}}
+      ],
+      "must_not": [
+        {"match": {"professor.name": "Bill"}}
+      ]
+    }
+  }
+}
+#this will return all the records HAVING name:accounting, room :e3 BUT PROFESSOR NAME MUST NOT BE Bill
+#########################################################################################################################
+
+#multi_match is to search for a word from diff fields and return if it matches
+GET courses/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "accounting",
+      "fields": ["name","professor.department"]
+    }
+  }
+}
+#the result will have all those records where "accounting" is present in either name field or professor.department field
+
+#########################################################################################################################
+
+#match_phrase is to match a phrase as it is defined in the query
+
+GET courses/_search
+{
+  "query": {
+    "match_phrase": {
+      "name": "cost accounting"
+    }
+  }
+}
+#op will only be the record which has entire "cost acounting" in name field AND WILL NOT RETURN records with low score  having only 'cost' or 'accounting' in name field as it happens in MATCH
+
+###########################################################################################################################################################################
+
+#QUERY_DSL_PART3
+#RANGE QUERY, TO INCUDE ALL RESULTS WITHTIN A GIVEN RANGE
+GET courses/_search
+{
+  "query": {
+    "range": {
+      "students_enrolled": {
+        "gte": 10,
+        "lte": 20
+      }
+    }
+  }
+}
+# will return all the records where students_enrolled are  between range 10-20
+#we can only use gte(greater than equal to) or lte  or gt(greater than) or lt.
+#we can use range on NUMERIC AND DATE FIELDS 
+################################################################################################
+
+################################IMP############################################################
+#WE CAN COMBINE  THESE QUERIES TO FORM COMPLEX QUERIES LIKE
+
+GET courses/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {"match": {"name": "accounting"}},
+        {"match": {"room": "e3"}}
+      ],
+      "must_not": [
+        {"range": {
+          "course_publish_date": {
+            "gte": "2015-12-31"
+          }
+        }}
+      ]
+    }
+  }
+}
+#will return all the results where name is 'accounting' and room is 'e3' and DATE is NOT GREATER THAN 2015-12-31
+
+
+##########################################################################################################################################################################
+
+#QUEY SEARCH DSL(FILTER CONTEXT)
+
+#FILTER DOES NOT RETURN RESULT BASED ON REVELENCY(_score), it is faster than query context since it does not have to compare revelency score and is cached. we can see _score is 0 in the output records
+GET courses/_search
+{
+  "query": {
+      "bool": {
+        "filter": [
+          {"match":{"name":"accounting"}}
+        ]
+      }
+  }
+}
+
+
+#we can use bool inside filter as well to execute same commands as we did in query context(must,must not etc)
+
+GET courses/_search
+{
+  "query": {
+    "bool": {
+      "filter": [
+        {"bool": {
+          "must":
+          [
+            {"match":{"name":"accounting"}}
+          ],
+          "must_not":
+          [
+            {"match":{"room":"e7"}}
+          ]
+        }}
+      ]
+    }
+  }
+}
+#we get the ouput as we do get in normal query context just that _score is 0 here
+#whatever goes inside the filter section is not scored
+
+#################################################################################################################################################################################
+POST /vehicles/_doc/_bulk
+{ "index": {}}
+{ "price" : 10000, "color" : "white", "make" : "honda", "sold" : "2016-10-28", "condition": "okay"}
+{ "index": {}}
+{ "price" : 20000, "color" : "white", "make" : "honda", "sold" : "2016-11-05", "condition": "new" }
+{ "index": {}}
+{ "price" : 30000, "color" : "green", "make" : "ford", "sold" : "2016-05-18", "condition": "new" }
+{ "index": {}}
+{ "price" : 15000, "color" : "blue", "make" : "toyota", "sold" : "2016-07-02", "condition": "good" }
+{ "index": {}}
+{ "price" : 12000, "color" : "green", "make" : "toyota", "sold" : "2016-08-19" , "condition": "good"}
+{ "index": {}}
+{ "price" : 18000, "color" : "red", "make" : "dodge", "sold" : "2016-11-05", "condition": "good"  }
+{ "index": {}}
+{ "price" : 80000, "color" : "red", "make" : "bmw", "sold" : "2016-01-01", "condition": "new"  }
+{ "index": {}}
+{ "price" : 25000, "color" : "blue", "make" : "ford", "sold" : "2016-08-22", "condition": "new"  }
+{ "index": {}}
+{ "price" : 10000, "color" : "gray", "make" : "dodge", "sold" : "2016-02-12", "condition": "okay" }
+{ "index": {}}
+{ "price" : 19000, "color" : "red", "make" : "dodge", "sold" : "2016-02-12", "condition": "good" }
+{ "index": {}}
+{ "price" : 20000, "color" : "red", "make" : "chevrolet", "sold" : "2016-08-15", "condition": "good" }
+{ "index": {}}
+{ "price" : 13000, "color" : "gray", "make" : "chevrolet", "sold" : "2016-11-20", "condition": "okay" }
+{ "index": {}}
+{ "price" : 12500, "color" : "gray", "make" : "dodge", "sold" : "2016-03-09", "condition": "okay" }
+{ "index": {}}
+{ "price" : 35000, "color" : "red", "make" : "dodge", "sold" : "2016-04-10", "condition": "new" }
+
+###############################################################################################################################################
+GET vehicles/_search
+{
+  "from": 0,
+  "size": 20,
+  "query": {
+    "match_all": {}
+  },
+  "sort": [
+    {
+      "price": {
+        "order": "desc"
+      }
+    }
+  ]
+}
+###################################################################################################################################################################################################
+
+AGGREGATIONS
+
+#AGGREGATION PART-1
+GET vehicles/_search
+{
+  "aggs": {
+    "car_make": {
+      "terms": {
+        "field": "make.keyword"
+      }
+    }
+  }
+}
+#this will aggregate the data based on make field ,i.e for each make field it will show how much data is there and it will have the output under aggregation section at the bottom of the output window below hits. under aggregation section it will have a field named as 'car_make' which we give in the query. car_make is  a custom field(any name can be given) and it is not a field provided by the elasticsearch like terms,field,aggs,query,must etc
+#########################################################################################################################
+#NOW SUPPOSE WE WANT TO AGGREGATE ON MAKE AND ALSO ON SAY AVG/MIN/MAX PRICE
+
+GET vehicles/_search
+{
+  "aggs": {
+    "popular_cars": {
+      "terms": {
+        "field": "make.keyword"
+      },
+      
+       "aggs":
+    {
+      "max_price":
+      {
+        "max": {
+          "field": "price"
+        }
+      }
+    }
+  }
+   
+  }
+}
+#this will aggregate in car make and will also give the max price for that particular make.See the output section to view the result
+#will give the result sorted on price in descending order
+
+
+ GET vehicles/_search
+{
+  "query": {
+    "match": {
+      "color": "red"
+    }
+  },
+  "aggs": {
+    "popular_cars": {
+      "terms": {
+        "field": "make.keyword"
+      },
+      "aggs": {
+        "avg_price": {
+          "avg": {
+            "field": "price"
+          }
+        },
+          "min_price": {
+          "min": {
+            "field": "price"
+          }
+        }
+      }
+    }
+  } 
+ }  
+#it will aggreagate on make field and will add min and avg for all make types. .keyword is sometime used for text fields,numeric fields do not req .keyword
+GET vehicles/_search
+{
+  "aggs": {
+    "cars_aggregated_on_price": {
+      "terms": {
+        "field": "price"
+      }
+    }
+  }
+}
+#we now have the cars aggregated on price , i.e how many cars of each price  is there
+#eg:10000rs-2 cars, 25000- 4 cars etc
+
+
+
+#AGGREGATION PART-2
+GET vehicles/_search
+{
+  "aggs": {
+    "by_sold_date": {
+      "range": {
+        "field": "sold",
+        "ranges": [
+          {
+            "from": "2016-01-01",
+            "to": "2016-10-28"
+          },
+          {
+             "from": "2016-11-05",
+             "to": "2016-12-31"
+          }
+        ]
+      },
+      "aggs": {
+        "stats_on_price": {
+          "stats": {
+            "field": "price"
+           }
+          }
+        }
+        
+      }
+
+    }
+  }
+  
+#each aggs is a bucket like we have a bucket by_sold_date which has data aggregated based on sold field, similarly we have stats_on_price bucket inside by_sold_date bucket  which gives the stats(stats is used to give min,max and avg all together instead of writing mix,man and avg seperately in the query)
+
+
+###############################################################################################
+
+GET vehicles/_search
+{
+  "query": {
+    "range": {
+      "price": {
+        "gte": 10
+      }
+    }
+  }, 
+  "aggs": {
+    "car_condition": {
+      "terms": {
+        "field": "condition.keyword"
+      },
+      "aggs": {
+        "color":{
+          "terms": {
+            "field": "color.keyword"
+          },
+          "aggs": {
+            "stats_on_price": {
+              "stats": {
+                "field": "price"
+              }
+            }
+          }
+        }
+      }
+    }  }
+}
+#this will create the first bucket on the 'conition' field, within it will create another bucket with 'color' field and within that it will aggregate on stats(MIN,MAX AND AVG). SEE OP  window for more clearity
+
+#Size 0 just means that the output will have only aggregation and will not have the actual value i.e hits[hits]
+
+#the op is good,new,okay , within good (red,blue ,gray etc i.e all colors) and within these colors the stats based on price
+#similarly for new and okay also we will have (due to screen size it is not visible in image,  but is present in kibana output console)
+
+#IMP->on adding query  with aggs FIRST it will filter out DATA based on Query clause(whatever query conditon is ) AND THEN APPLY AGGREGATION on it.Like here first it will filter out data for price greater than 10 and then apply aggregation on filtered data
+
+
+
+
+
+
+
+
+

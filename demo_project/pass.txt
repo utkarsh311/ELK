@@ -1,0 +1,76 @@
+Changed password for user apm_system
+PASSWORD apm_system = 6sCxRYkP7BL44roOKtOb
+Changed password for user kibana_system
+PASSWORD kibana_system = oiB0GqpbnXtoSg002amn
+Changed password for user kibana
+PASSWORD kibana = oiB0GqpbnXtoSg002amn
+Changed password for user logstash_system
+PASSWORD logstash_system = IkJI8F8zskaLfRPKygxI
+Changed password for user beats_system
+PASSWORD beats_system = pLRpXriMj7mzugY2T2XS
+Changed password for user remote_monitoring_user
+PASSWORD remote_monitoring_user = sZmphAluGXPxpaTC5N3U
+Changed password for user elastic
+PASSWORD elastic = yWi0nLtFhV7oeiHSxjN5
+
+
+
+/usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/logstash-sample.conf
+
+
+
+PUT _watcher/watch/status_watch
+{
+  "trigger" : {
+    "schedule" : { "interval" : "1h" }
+  },
+   "input": {
+    "search": {
+      "request": {
+        "indices": [
+          "ashnik-csv-demo"
+        ],
+        "body": {
+          "query": {
+            "bool": {
+              "must": [
+                {
+                    "match":{"status":"404"}
+                },
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-10m"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "condition" : {
+    "compare" : {
+      "ctx.payload.hits.total":
+      {
+        "gt":0
+      }
+    }
+  },
+  "actions" : {
+    "send_email" : {
+      "email" : {
+        "to" : "ashnik01@gmail.com",
+        "subject" : "status warning",
+        "body" : "error 404 found"
+      }
+    }
+  }
+}
+
+
+
+
+
